@@ -1,21 +1,26 @@
-FROM golang:latest AS build-backend
+FROM alpine:latest
 
-RUN mkdir /app
-ADD . /app
-WORKDIR /app
+ARG PB_VERSION=0.18.9
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o pocketbase .
-
-FROM alpine:latest AS production
-COPY --from=build-backend /app .
-EXPOSE 8081
-
-# Install required packages
 RUN apk add --no-cache \
+    unzip \
     ca-certificates \
-    fuse3 \
-    sqlite
+    # this is needed only if you want to use scp to copy later your pb_data locally
+    openssh
 
-COPY --from=flyio/litefs:0.5 /usr/local/bin/litefs /usr/local/bin/litefs
+# download and unzip PocketBase
+ADD https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}/pocketbase_${PB_VERSION}_linux_amd64.zip /tmp/pb.zip
+RUN unzip /tmp/pb.zip -d /pb/
 
-ENTRYPOINT litefs mount
+# uncomment to copy the local pb_migrations dir into the container
+# COPY ./pb_migrations /pb/pb_migrations
+
+COPY ./pb_data /pb/pb_data
+
+# uncomment to copy the local pb_hooks dir into the container
+# COPY ./pb_hooks /pb/pb_hooks
+
+EXPOSE 8080
+
+# start PocketBase
+CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8080"]
